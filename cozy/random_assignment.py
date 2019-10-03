@@ -45,8 +45,7 @@ def extract_listcomp(e):
     """
     Extract list comprehension components from its desugared form
     :param e: list comprehension expression
-    :return: list comprehension structure { "P": ..., "C": ..., "V": ... }
-             (we use "lc" to refer to this type of structure).
+    :return: list comprehension structure { "P": ..., "C": ..., "V": ... }.
              "P" is pulled expressions, "C" is condition, "V" is returned value.
              In the written form, it is { V(p0, ..., pn) | p0 <- P_0, ..., pn <- P_n, C(p0, ..., pn)}.
              Notice that all V and C already have free variables p0 to pn.
