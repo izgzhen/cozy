@@ -3,4 +3,5 @@
 *.jar
 *.synthesized
 listcomp
+*.rb
 select
