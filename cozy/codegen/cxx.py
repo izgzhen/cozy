@@ -10,7 +10,7 @@ from cozy.syntax import (
     Type, INT, BOOL, TNative, TSet, TList, TBag, THandle, TEnum, TTuple, TRecord, TFloat,
     Exp, EVar, ENum, EFALSE, ETRUE, ZERO, ENull, EEq, ELt, ENot, ECond, EAll,
     EEnumEntry, ETuple, ETupleGet, EGetField,
-    Stm, SNoOp, SIf, SDecl, SSeq, seq, SForEach, SAssign)
+    Stm, SNoOp, SIf, SDecl, SSeq, seq, SForEach, SAssign, SCall)
 from cozy.target_syntax import TArray, TRef, EEnumToInt, EMapKeys, SReturn
 from cozy.syntax_tools import pprint, all_types, fresh_var, subst, free_vars, all_exps, break_seq, shallow_copy
 from cozy.typecheck import is_collection, is_scalar
@@ -272,6 +272,14 @@ class CxxPrinter(CodeGenerator):
         self.declare(m, e)
         return m.id
 
+    def visit_EMapKeys(self, e):
+        key = self.fv(e.type.elem_type)
+        keys = self.fv(e.type)
+        self.declare(keys)
+        add_to_keys = SCall(keys, "add", [key])
+        self.visit(SForEach(key, e, add_to_keys))
+        return keys.id
+
     def visit_EHasKey(self, e):
         map = self.visit(e.map)
         key = self.visit(e.key)
@@ -409,7 +417,7 @@ class CxxPrinter(CodeGenerator):
         raise Exception("argmax is supposed to be handled by simplify_and_optimize")
 
     def visit_EListSlice(self, e):
-        raise Exception("list slicing is supposed to be handled by simplify_and_optimize")
+        raise Exception("list slicing is supposed to be handled by simplify_and_optimize: {}".format(pprint(e)))
 
     def reverse_inplace(self, e : EVar) -> Stm:
         assert isinstance(e.type, TList)
@@ -426,7 +434,10 @@ class CxxPrinter(CodeGenerator):
             self.declare(v, e.e)
             self.visit(self.reverse_inplace(v))
             return v.id
-        elif op in (UOp.Distinct, UOp.AreUnique, UOp.Length, UOp.Sum, UOp.All, UOp.Any, UOp.Exists, UOp.Empty, UOp.The):
+        elif op == UOp.Length:
+            ee = self.visit(e.e)
+            return "({e}).size()".format(e=ee)
+        elif op in (UOp.Distinct, UOp.AreUnique, UOp.Sum, UOp.All, UOp.Any, UOp.Exists, UOp.Empty, UOp.The):
             raise Exception("{!r} operator is supposed to be handled by simplify_and_optimize".format(op))
         else:
             raise NotImplementedError(op)
