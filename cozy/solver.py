@@ -12,6 +12,7 @@ from collections import defaultdict, OrderedDict
 from datetime import datetime, timedelta
 from functools import lru_cache
 import threading
+import hashlib
 
 import z3
 
@@ -1019,6 +1020,7 @@ class IncrementalSolver(object):
         self._env = OrderedDict()
         self.stk = []
         self.do_cse = do_cse
+        self.added_assumptions = []
 
         with _LOCK:
             ctx = z3.Context()
@@ -1073,6 +1075,7 @@ class IncrementalSolver(object):
         try:
             with _LOCK:
                 self.z3_solver.add(self._convert(e))
+                self.added_assumptions.append(self.z3_solver.sexpr())
         except Exception:
             print(" ---> to reproduce: satisfy({e!r}, vars={vars!r}, collection_depth={collection_depth!r}, validate_model={validate_model!r})".format(
                 e=e,
@@ -1150,6 +1153,12 @@ class IncrementalSolver(object):
             a = self._convert(e)
             solver.push()
             solver.add(a)
+            smt_query = "\n".join(self.added_assumptions) + "\n" + solver.sexpr() + "\n(check-sat)\n"
+            m = hashlib.sha256()
+            m.update(bytes(smt_query, "utf-8"))
+            h = str(m.hexdigest()[:16])
+            with open("/tmp/cozy_dumped_" + h + ".smt2", "w+") as f:
+                f.write(smt_query)
 
             _tock(e, "encode")
             with task("invoke Z3"):
