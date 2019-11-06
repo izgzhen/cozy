@@ -965,7 +965,7 @@ def decideable(t : Type):
     return type(t) in DECIDABLE_TYPES
 
 _start = None
-_debug_duration = timedelta(seconds=5)
+_debug_duration = timedelta(seconds=1)
 def _tick():
     global _start
     _start = datetime.now()
@@ -977,6 +977,8 @@ def _tock(e, event):
     _start = now
     if elapsed > _debug_duration:
         print("WARNING: took {elapsed}s to {event}".format(event=event, elapsed=elapsed.total_seconds()))
+        return elapsed
+    return None
 
 _LOCK = threading.RLock()
 
@@ -1153,17 +1155,21 @@ class IncrementalSolver(object):
             a = self._convert(e)
             solver.push()
             solver.add(a)
-            smt_query = "\n".join(self.added_assumptions) + "\n" + solver.sexpr() + "\n(check-sat)\n"
-            m = hashlib.sha256()
-            m.update(bytes(smt_query, "utf-8"))
-            h = str(m.hexdigest()[:16])
-            with open("/tmp/cozy_dumped_" + h + ".smt2", "w+") as f:
-                f.write(smt_query)
 
-            _tock(e, "encode")
+            long_encode = _tock(e, "encode")
+
             with task("invoke Z3"):
                 res = solver.check()
-            _tock(e, "solve")
+            long_solve = _tock(e, "solve")
+
+            if long_encode or long_solve:
+                smt2_path = self.save_query(solver)
+                log_path = smt2_path.replace(".smt2", ".log")
+                if long_encode:
+                    append_log(log_path, "long_encode", str(long_encode))
+                if long_solve:
+                    append_log(log_path, "long_solve", str(long_solve))
+
             if res == z3.unsat:
                 solver.pop()
                 return None
@@ -1256,6 +1262,20 @@ class IncrementalSolver(object):
 
     def valid(self, e):
         return not self.satisfiable(ENot(e))
+
+    def save_query(self, solver):
+        smt_query = "\n".join(self.added_assumptions) + "\n" + solver.sexpr() + "\n(check-sat)\n"
+        m = hashlib.sha256()
+        m.update(bytes(smt_query, "utf-8"))
+        h = str(m.hexdigest()[:16])
+        smt2_path = "/tmp/cozy_dumped_" + h + ".smt2"
+        with open(smt2_path, "w+") as f:
+            f.write(smt_query)
+        return smt2_path
+
+def append_log(log_file: str, k, v):
+    with open(log_file, "a+") as myfile:
+        myfile.write("%s %s" % (k, v))
 
 def satisfy(e, **opts):
     s = IncrementalSolver(**opts)

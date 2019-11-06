@@ -4,19 +4,19 @@ set -x
 set -e
 
 function test_example {
-  cozy $1.ds --c++ $2 --java $3 --simple
-  g++ -std=c++11 -c $2
-  rm $2
-  javac -cp .:* $3
-  rm $3
+  cozy $1.ds --c++ $2 --java $3 --timeout 900
+#  g++ -std=c++11 -c $2
+#  rm $2
+#  javac -cp .:* $3
+#  rm $3
 }
 
 function test_example_1min_guava {
-  cozy $1.ds --c++ $2 --java $3 --timeout 60 --guava
-  g++ -std=c++11 -c $2
-  rm $2
-  javac -cp .:* $3
-  rm $3
+  cozy $1.ds --c++ $2 --java $3 --timeout 900 --guava
+#  g++ -std=c++11 -c $2
+#  rm $2
+#  javac -cp .:* $3
+#  rm $3
 }
 
 cd examples
