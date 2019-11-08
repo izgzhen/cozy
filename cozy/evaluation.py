@@ -101,7 +101,7 @@ def construct_value(t : Type) -> Exp:
     elif isinstance(t, THandle):
         e = EHandle(construct_value(INT), construct_value(t.value_type))
     elif isinstance(t, TNative):
-        e = ENative(construct_value(INT))
+        e = NULL
     elif isinstance(t, TMap):
         e = EMakeMap2(
             EEmptyList().with_type(TBag(t.k)),
