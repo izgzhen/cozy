@@ -368,3 +368,10 @@ class RubyPrinter(CxxPrinter):
 
     def visit_ENull(self, e):
         return "nil"
+
+    def visit_ENative(self, e):
+        assert e.e == ENum(0)
+        v = self.fv(e.type, "tmp")
+        self.write_stmt(self.visit(v), " = ", "nil")
+        return v.id
+
