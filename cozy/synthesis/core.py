@@ -24,7 +24,7 @@ from cozy.syntax import (
     Op,
     Exp, ETRUE, ONE, EVar, ENum, EStr, EBool, EEmptyList, ESingleton, ELen, ENull,
     EAll, ENot, EImplies, EEq, EGt, ELe, ECond, EEnumEntry, EGetField,
-    EBinOp, EUnaryOp, UOp, EArgMin, EArgMax, ELambda)
+    EBinOp, EUnaryOp, UOp, EArgMin, EArgMax, ELambda, TNative)
 from cozy.target_syntax import (
     EFlatMap, EFilter, EMakeMap2, EStateVar,
     EDropFront, EDropBack)
@@ -414,7 +414,10 @@ def search_for_improvements(
                 for info in enum.enumerate_with_info(size=size, context=ctx, pool=pool):
                     with task("searching for obvious substitution", expression=pprint(info.e)):
                         fp = info.fingerprint
+                        # If enumerate to NULL
                         for ((fpx, cc, pp), reses) in watches.items():
+                            if isinstance(fp.type, TNative):
+                                continue
                             if cc != ctx or pp != pool:
                                 continue
 
