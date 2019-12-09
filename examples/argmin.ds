@@ -7,7 +7,7 @@ MinFinder:
 
     query findmin()
         assume exists xs;
-        argmin {x -> x.val} xs
+        argmax {x -> x.val} xs
 
     op chval(x : T, nv : Native "int")
         assume x in xs;
