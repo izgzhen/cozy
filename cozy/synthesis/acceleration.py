@@ -37,9 +37,12 @@ def try_optimize(e : Exp, context : Context, pool : Pool):
 
     None of the expressions will be syntactically equivalent to `e`.
     """
-    for ee in _try_optimize(e, context, pool):
-        if not alpha_equivalent(e, ee):
-            yield ee
+    if isinstance(e, ENull):
+        yield e
+    else:
+        for ee in _try_optimize(e, context, pool):
+            if not alpha_equivalent(e, ee):
+                yield ee
 
 def _try_optimize(e : Exp, context : Context, pool : Pool):
     if not accelerate.value:
