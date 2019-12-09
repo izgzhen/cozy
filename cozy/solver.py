@@ -441,6 +441,8 @@ class ToZ3(Visitor):
         return z3.IntSort(self.ctx)
     def visit_TBool(self, t):
         return z3.BoolSort(self.ctx)
+    def visit_TBag(self, t):
+        return z3.ArraySort(z3.IntSort(self.ctx), self.visit(t.elem_type))
     def visit_Type(self, t):
         raise NotImplementedError(t)
     def visit_EVar(self, v, env):
