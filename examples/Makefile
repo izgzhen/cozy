@@ -26,7 +26,7 @@ select: select.cpp select.h
 	g++ -std=c++11 -O3 -Werror '$<' -o '$@'
 
 listcomp: listcomp.cpp listcomp.h
-	g++ -std=c++11 -O3 -Werror '$<' -o '$@'
+	g++ -std=c++11 -O3 -Wno-parentheses-equality -Werror '$<' -o '$@'
 
 run-select: select
 	time ./select
