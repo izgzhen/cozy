@@ -11,7 +11,7 @@ from cozy.syntax import (
     BOOL, INT, INT_BAG, TSet, THandle,
     Exp, ZERO, ONE, ETRUE, EFALSE, EVar, ENum, ELambda, ELet, ELen, ELt,
     ECond, EUnaryOp, UOp, EBinOp, BOp, ENot, EGt, EIn, min_of, max_of,
-    EGetField, EListGet, EListSlice, EEmptyList, ESingleton,
+    EGetField, EListGet, EListSlice, EEmptyList, ESingleton, ECall,
     Stm, SAssign, SIf, SForEach, SNoOp, seq, SSeq, SDecl, SCall)
 from cozy.target_syntax import (
     SSwap, SWhile, SReturn, SSwitch,
@@ -438,6 +438,12 @@ class ExpressionOptimizer(BottomUpRewriter):
             SMapUpdate(res, k, v,
                 SAssign(v, e.value_function.body)))))
         return EMove(res).with_type(res.type)
+
+    def visit_ECall(self, e):
+        f = e.func
+        args = e.args
+        new_args = [ self.visit(arg) for arg in args ]
+        return ECall(f, new_args).with_type(e.type)
 
     def visit_ELet(self, e):
         value_exp = self.visit(e.e)
