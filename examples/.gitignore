@@ -5,3 +5,5 @@
 listcomp
 *.rb
 select
+remove
+!remove.cpp

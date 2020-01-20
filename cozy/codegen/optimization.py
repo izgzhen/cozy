@@ -9,10 +9,10 @@ The key methods are
 from cozy.common import fresh_name
 from cozy.syntax import (
     BOOL, INT, INT_BAG, TSet, THandle,
-    Exp, ZERO, ONE, ETRUE, EFALSE, EVar, ENum, ELambda, ELet, ELen, ELt,
-    ECond, EUnaryOp, UOp, EBinOp, BOp, ENot, EGt, EIn, min_of, max_of,
-    EGetField, EListGet, EListSlice, EEmptyList, ESingleton,
-    Stm, SAssign, SIf, SForEach, SNoOp, seq, SSeq, SDecl, SCall)
+    Exp, ZERO, ONE, ETRUE, EFALSE, EVar, ENum, ELambda, ELet,
+    ECond, EUnaryOp, UOp, EBinOp, BOp, ENot, EGt, EIn,
+    EGetField, EListGet, EEmptyList, ESingleton,
+    Stm, SAssign, SIf, SForEach, SNoOp, seq, SSeq, SDecl, SCall, EListSlice)
 from cozy.target_syntax import (
     SSwap, SWhile, SReturn, SSwitch,
     EMap, EFilter, EFlatMap,
@@ -124,14 +124,6 @@ def stream(iterable : Exp, loop_var : EVar, body : Stm) -> Stm:
                     SIf(EIn(loop_var, rhs),
                         SCall(rhs, "remove", (loop_var,)),
                         body))])
-    elif isinstance(iterable, EFilter):
-        return stream(
-            EFlatMap(iterable.e, ELambda(iterable.predicate.arg,
-                ECond(iterable.predicate.body,
-                    ESingleton(iterable.predicate.arg).with_type(iterable.type),
-                    EEmptyList().with_type(iterable.type)).with_type(iterable.type))).with_type(iterable.type),
-            loop_var,
-            body)
     elif isinstance(iterable, EMap):
         return stream(
             EFlatMap(iterable.e, ELambda(iterable.transform_function.arg,
@@ -146,19 +138,6 @@ def stream(iterable : Exp, loop_var : EVar, body : Stm) -> Stm:
             iterable.e,
             inner_loop_var,
             stream(iterable.transform_function.apply_to(inner_loop_var), loop_var, body))
-    elif isinstance(iterable, EListSlice):
-        elem_type = iterable.type.elem_type
-        l = fresh_var(iterable.e.type, "list")
-        s = fresh_var(INT, "start")
-        e = fresh_var(INT, "end")
-        return simplify_and_optimize(seq([
-            SDecl(l, iterable.e),
-            SDecl(s, max_of(iterable.start, ZERO)),
-            SDecl(e, min_of(iterable.end, ELen(l))),
-            SWhile(ELt(s, e), seq([
-                SDecl(loop_var, EListGet(l, s).with_type(elem_type)),
-                body,
-                SAssign(s, EBinOp(s, "+", ONE).with_type(INT))]))]))
     elif isinstance(iterable, ELet):
         v = fresh_var(
             iterable.body_function.arg.type,
@@ -171,7 +150,7 @@ def stream(iterable : Exp, loop_var : EVar, body : Stm) -> Stm:
     else:
         assert is_collection(iterable.type), repr(iterable)
         setup, e = simplify_and_optimize_expression(iterable)
-        return seq([setup, SForEach(loop_var, e, simplify_and_optimize(body))])
+        return seq([setup, SForEach(loop_var, e, simplify_and_optimize(body))]) # TODO: update this
 
 def simplify_and_optimize(s : Stm) -> Stm:
     """Simplify and optimize a statement.
@@ -295,6 +274,7 @@ class ExpressionOptimizer(BottomUpRewriter):
         self.stms = []
 
     def visit_iterable(self, e):
+        # NOTE: this can be wasteful sometimes
         res = fresh_var(e.type)
         self.stms.append(SDecl(res, EEmptyList().with_type(e.type)))
         x = fresh_var(e.type.elem_type)
@@ -302,9 +282,13 @@ class ExpressionOptimizer(BottomUpRewriter):
         return EMove(res).with_type(res.type)
 
     def visit_EFilter(self, e):
-        return self.visit_iterable(e)
+        if isinstance(e.e, EEmptyList):
+            return self.visit_iterable(e.e)
+        return EFilter(self.visit(e.e), self.visit(e.predicate)).with_type(e.type)
 
     def visit_EMap(self, e):
+        if isinstance(e.e, EEmptyList):
+            return self.visit_iterable(e.e)
         return self.visit_iterable(e)
 
     def visit_EFlatMap(self, e):
@@ -405,9 +389,14 @@ class ExpressionOptimizer(BottomUpRewriter):
 
         return self.visit_Exp(e)
 
+    def visit_EListSlice(self, e):
+        return EListSlice(self.visit(e.e), e.start, e.end).with_type(e.type)
+
     def visit_EBinOp(self, e):
-        if e.op in ("+", "-") and is_collection(e.type):
+        if e.op == "-" and is_collection(e.type):
             return self.visit_iterable(e)
+        elif e.op == "+" and is_collection(e.type):
+            return EBinOp(self.visit(e.e1), "+", self.visit(e.e2)).with_type(e.type)
         elif e.op == BOp.In and not isinstance(e.e2.type, TSet):
             t = BOOL
             res = fresh_var(t, "found")

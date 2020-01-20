@@ -306,6 +306,9 @@ class Typechecker(Visitor):
         if isinstance(e.type, syntax.TBag):  return e.type.elem_type
         if isinstance(e.type, syntax.TSet):  return e.type.elem_type
         if isinstance(e.type, syntax.TList): return e.type.elem_type
+        if isinstance(e.type, syntax.TApp):
+            e.type = self.visit_TApp(e.type)
+            return e.type.elem_type
         self.report_err(e, "expression has non-collection type {}".format(e.type))
         return DEFAULT_TYPE
 
@@ -523,8 +526,9 @@ class Typechecker(Visitor):
                 self.report_err(e, "cannot get element from non-list")
         self.visit(e.start)
         self.ensure_type(e.start, INT, "slice start must be an Int")
-        self.visit(e.end)
-        self.ensure_type(e.end, INT, "slice end must be an Int")
+        if e.end is not None:
+            self.visit(e.end)
+            self.ensure_type(e.end, INT, "slice end must be an Int")
 
     def visit_EListComprehension(self, e):
         collection_types = OrderedSet()

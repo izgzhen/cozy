@@ -723,7 +723,10 @@ class ToZ3(Visitor):
             return [self.all(m, st <= idx, idx < ed)] + rest
         masks, elems = self.visit(e.e, env)
         start = self.visit(e.start, env)
-        end = self.visit(e.end, env)
+        if e.end is None:
+            end = self.visit(EUnaryOp(UOp.Length, e.e).with_type(INT), env)
+        else:
+            end = self.visit(e.end, env)
         new_masks = symb_slice(masks, start, end, self.int_zero)
         return (new_masks, elems)
     def visit_EDropFront(self, e, env):

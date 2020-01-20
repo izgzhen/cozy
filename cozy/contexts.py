@@ -343,6 +343,11 @@ class _Shredder(Visitor):
         yield (e, self.ctx, self.pool)
         yield from self.visit(e.e)
         yield from self.visit(e.body_function, ESingleton(e.e).with_type(TBag(e.e.type)))
+    def visit_EListSlice(self, e):
+        yield (e, self.ctx, self.pool)
+        for child in e.children():
+            if child is not None:
+                yield from self.visit(child)
     def visit_Exp(self, e):
         yield (e, self.ctx, self.pool)
         for child in e.children():

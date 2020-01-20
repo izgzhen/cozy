@@ -19,6 +19,9 @@ TIMEOUT ?= 240
 listcomp.h: listcomp-flatmap.ds
 	cozy -t $(TIMEOUT) --allow-big-sets listcomp-flatmap.ds --c++ listcomp.h -p 8080 --verbose --save listcomp.synthesized
 
+remove.h: remove.ds
+	cozy -t $(TIMEOUT) --allow-big-sets remove.ds --c++ remove.h -p 8080
+
 select.h: select-flatmap.ds
 	cozy -t $(TIMEOUT) --allow-big-sets select-flatmap.ds --c++ select.h -p 8080 --verbose --save select.synthesized
 

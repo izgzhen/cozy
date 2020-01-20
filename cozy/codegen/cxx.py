@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import json
+import os
 import itertools
 
 from cozy import common, evaluation
@@ -10,7 +11,7 @@ from cozy.syntax import (
     Type, INT, BOOL, TNative, TSet, TList, TBag, THandle, TEnum, TTuple, TRecord, TFloat,
     Exp, EVar, ENum, EFALSE, ETRUE, ZERO, ENull, EEq, ELt, ENot, ECond, EAll,
     EEnumEntry, ETuple, ETupleGet, EGetField,
-    Stm, SNoOp, SIf, SDecl, SSeq, seq, SForEach, SAssign)
+    Stm, SNoOp, SIf, SDecl, SSeq, seq, SForEach, SAssign, EEmptyList, SCall, EUnaryOp)
 from cozy.target_syntax import TArray, TRef, EEnumToInt, EMapKeys, SReturn
 from cozy.syntax_tools import pprint, all_types, fresh_var, subst, free_vars, all_exps, break_seq, shallow_copy
 from cozy.typecheck import is_collection, is_scalar
@@ -79,7 +80,7 @@ class CxxPrinter(CodeGenerator):
         return self.visit_TNativeMap(t, name)
 
     def visit_TList(self, t, name):
-        return self.visit_TNativeList(t, name)
+        return "std::shared_ptr<Stream< {} >> {}".format(self.visit(t.elem_type, ""), name)
 
     def visit_TBag(self, t, name):
         return self.visit_TNativeList(t, name)
@@ -173,7 +174,11 @@ class CxxPrinter(CodeGenerator):
             self.visit_args(itertools.chain(q.args, [("_callback", TNative("const F&"))]))
             self.write(") ")
             with self.block():
-                self.visit(simplify_and_optimize(SForEach(x, ret_exp, SEscape("{indent}_callback({x});\n", ["x"], [x]))))
+                if isinstance(ret_type, TList):
+                    self.visit(SCall(ret_exp, "foreach", [EVar("_callback")]))
+                else:
+                    self.visit(
+                        simplify_and_optimize(SForEach(x, ret_exp, SEscape("{indent}_callback({x});\n", ["x"], [x]))))
             self.end_statement()
         else:
             if q.docstring:
@@ -238,10 +243,11 @@ class CxxPrinter(CodeGenerator):
     def visit_EListGet(self, e):
         l = self.visit(e.e)
         i = self.visit(e.index)
-        return self.visit(EEscape(
-            "(" + i + " >= 0 && " + i + " < " + l + ".size()) ? " + l + "[" + i + "] : {default}",
-            ("default",),
-            (evaluation.construct_value(e.type),)).with_type(e.type))
+        return l + "->get(" + i + ")"
+            # self.visit(EEscape(
+            # # "(" + i + " >= 0 && " + i + " < " + l + ".size()) ? " + l + ".get(" + i + ") : {default}",
+            # ("default",),
+            # (evaluation.construct_value(e.type),)).with_type(e.type))
 
     def visit_EArrayIndexOf(self, e):
         if isinstance(e.a, EVar): pass
@@ -355,6 +361,9 @@ class CxxPrinter(CodeGenerator):
         op = e.op
         if op == "==":
             return self._eq(e.e1, e.e2)
+        elif op == "+" and is_collection(e.type):
+            t = self.visit(e.type.elem_type, "").strip()
+            return "(std::make_shared<ConcatStream< {} >>({}, {}))".format(t, self.visit(e.e1), self.visit(e.e2))
         elif op == "===":
             # rewrite deep-equality test into regular equality
             op = "=="
@@ -395,11 +404,13 @@ class CxxPrinter(CodeGenerator):
                     body))
             self.end_statement()
             return
+        assert isinstance(iterable.type, TList)
         iterable = self.visit(iterable)
         self.begin_statement()
-        self.write("for (", self.visit(loop_var.type, loop_var.id), " : ", iterable, ") ")
+        self.write(iterable, "->foreach([&](", self.visit(loop_var.type, loop_var.id), ") {")
         with self.block():
             self.visit(body)
+        self.write("});")
         self.end_statement()
 
     def visit_EArgMin(self, e):
@@ -409,11 +420,20 @@ class CxxPrinter(CodeGenerator):
         raise Exception("argmax is supposed to be handled by simplify_and_optimize")
 
     def visit_EListSlice(self, e):
-        raise Exception("list slicing is supposed to be handled by simplify_and_optimize")
+        elem_type = self.visit(e.e.type.elem_type, "").strip()
+        if isinstance(e.e, EEmptyList):
+            return "std::make_shared<ConcreteVecStream< {} >>()".format(elem_type)
+        l = self.visit(e.e)
+        start = self.visit(e.start)
+        if e.end is None:
+            return "std::make_shared<SliceStream< %s >>(%s, %s)" % (elem_type, l, start)
+        else:
+            end = self.visit(e.end)
+            return "std::make_shared<SliceStream< %s >>(%s, %s, %s)" % (elem_type, l, start, end)
 
     def reverse_inplace(self, e : EVar) -> Stm:
         assert isinstance(e.type, TList)
-        return SEscape("{indent}std::reverse({e}.begin(), {e}.end());\n", ("e",), (e,))
+        return SEscape("{indent}({e}.reverse());\n", ("e",), (e,))
 
     def visit_EUnaryOp(self, e):
         op = e.op
@@ -436,7 +456,6 @@ class CxxPrinter(CodeGenerator):
 
     def visit_EGetField(self, e):
         ee = self.visit(e.e)
-        op = "."
         if isinstance(e.e.type, THandle):
             # Ugh, we really need Cozy to know about partial functions...
             # Cozy doesn't know that handle types (aka pointers) can be null.
@@ -564,6 +583,8 @@ class CxxPrinter(CodeGenerator):
         if type(call.target.type) in (TBag, TList):
             if call.func == "add":
                 self.write(target, ".push_back(", args[0], ");")
+            elif call.func == "foreach":
+                self.write(target, "->foreach(", args[0], ");")
             elif call.func == "remove":
                 v = self.fv(TNative("auto"), "it")
                 self.write("auto ", v.id, "(::std::find(", target, ".begin(), ", target, ".end(), ", args[0], "));")
@@ -739,6 +760,15 @@ class CxxPrinter(CodeGenerator):
         value = self.visit(e.e)
         return self.visit(e.type, "") + " { " + value + " }"
 
+    def visit_EFilter(self, e):
+        t = self.visit(e.type.elem_type, "").strip()
+        l = self.visit(e.e)
+        predicate = self.visit(e.predicate)
+        return "(std::make_shared<FilterStream< {} >>({}, {}))".format(t, l, predicate)
+
+    def visit_ELambda(self, e):
+        return "([](%s) { return %s; })" % (self.visit(e.arg.type, e.arg.id), self.visit(e.body))
+
     @typechecked
     def visit_Spec(self, spec : Spec, state_exps : { str : Exp }, sharing, abstract_state=()):
         self.state_exps = state_exps
@@ -757,6 +787,9 @@ class CxxPrinter(CodeGenerator):
             self.write("#include <QHash>\n")
         else:
             self.write("#include <unordered_map>\n")
+        module_dir = os.path.dirname(__file__)
+        with open(module_dir + "/prelude.hpp", "r") as f:
+            self.write(f.read())
 
         if spec.header:
             self.write("\n" + spec.header.strip() + "\n")

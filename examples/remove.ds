@@ -1,0 +1,17 @@
+Remove:
+    state xs : List<Float>
+    state isDropped : Bool
+    state dropped : Int
+
+    query q()
+        isDropped ? (xs[:dropped] + xs[(dropped + 1):]) : xs
+
+    query removed()
+        isDropped ? xs[dropped] : 0f
+
+    op remove(i: Int)
+        isDropped = true;
+        dropped = i;
+
+    op restore()
+        isDropped = false;

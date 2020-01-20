@@ -29,6 +29,7 @@ _KEYWORDS = ([
     "enum",
     "private",
     "op",
+    "as",
     "query",
     "state",
     "assume",
@@ -334,6 +335,7 @@ def make_parser():
                | exp OP_DOT WORD
                | OP_OPEN_PAREN exp_list OP_CLOSE_PAREN
                | OP_OPEN_BRACE record_fields OP_CLOSE_BRACE
+               | OP_OPEN_BRACKET OP_CLOSE_BRACKET KW_AS type
                | OP_OPEN_BRACKET exp OP_CLOSE_BRACKET
                | OP_OPEN_BRACKET exp OP_VBAR comprehension_body OP_CLOSE_BRACKET
                | exp OP_OPEN_BRACKET slice OP_CLOSE_BRACKET
@@ -411,11 +413,12 @@ def make_parser():
                     end = p[3][1]
                     if start is None:
                         start = syntax.ZERO
-                    if end is None:
-                        end = syntax.ELen(p[1])
                     p[0] = syntax.EListSlice(p[1], start, end)
             elif p[1] == "[":
-                p[0] = syntax.EListComprehension(p[2], p[4])
+                if p[2] == "]" and p[3] == "as":
+                    p[0] = syntax.EEmptyList().with_type(p[4])
+                else:
+                    p[0] = syntax.EListComprehension(p[2], p[4])
             elif p[2] == "(":
                 p[0] = syntax.ECall(p[1], p[3])
             else:

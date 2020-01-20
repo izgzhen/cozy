@@ -335,7 +335,11 @@ class PrettyPrinter(common.Visitor):
         return "{}[{}]".format(self.visit(e.e), self.visit(e.index))
 
     def visit_EListSlice(self, e):
-        return "{}[{}:{}]".format(self.visit(e.e), self.visit(e.start), self.visit(e.end))
+        if e.end is not None:
+            end = self.visit(e.end)
+        else:
+            end = ""
+        return "{}[{}:{}]".format(self.visit(e.e), self.visit(e.start), end)
 
     def visit_EMap(self, e):
         return "{} {{{}}} ({})".format(self.format_builtin("Map"), self.visit(e.transform_function), self.visit(e.e))
@@ -1377,11 +1381,15 @@ def alpha_equivalent(e1 : syntax.Exp, e2 : syntax.Exp) -> bool:
             return len(t1) == len(t2) and all(self.visit(x, y) for x, y in zip(t1, t2))
         def visit_list(self, t1, t2):
             return len(t1) == len(t2) and all(self.visit(x, y) for x, y in zip(t1, t2))
+        def visit_EListSlice(self, e1, e2):
+            return all(self.visit(x, y) for (x, y) in zip(e1.children(), e2.children()))
         def visit_Exp(self, e1, e2):
             if type(e1) is not type(e2):
                 return False
             return all(self.visit(x, y) for (x, y) in zip(e1.children(), e2.children()))
         def visit_object(self, o, *args):
+            if o is None and args[0] is None:
+                return True
             raise NotImplementedError("{} ({})".format(type(o), repr(o)))
 
     return V().visit(e1, e2)

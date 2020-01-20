@@ -579,7 +579,10 @@ def _compile(e, env : {str:int}, out):
     elif isinstance(e, EListSlice):
         _compile(e.e, env, out)
         _compile(e.start, env, out)
-        _compile(e.end, env, out)
+        if e.end is None:
+            _compile(EUnaryOp(UOp.Length, e.e), env, out)
+        else:
+            _compile(e.end, env, out)
         out.append(list_slice)
     elif isinstance(e, EDropFront):
         _compile(e.e, env, out)

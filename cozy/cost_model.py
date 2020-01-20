@@ -370,7 +370,7 @@ def maintenance_cost(e : Exp, op : Op, freebies : [Exp] = []):
 # These require walking over the entire collection.
 # Some others (e.g. "exists" or "empty") just look at the first item.
 LINEAR_TIME_UOPS = {
-    UOp.Sum, UOp.Length,
+    UOp.Sum,
     UOp.Distinct, UOp.AreUnique,
     UOp.All, UOp.Any,
     UOp.Reversed }
@@ -496,7 +496,7 @@ def rt(e, account_for_constant_factors=True):
         elif isinstance(e, EMap) or isinstance(e, EFlatMap):
             terms.append(EUnaryOp(UOp.Sum, EMap(e.e, ELambda(e.transform_function.arg, rt(e.transform_function.body))).with_type(INT_BAG)).with_type(INT))
         elif isinstance(e, EListSlice):
-            terms.append(max_of(ZERO, EBinOp(e.end, "-", e.start).with_type(INT)))
+            pass # Slice is cheap
         elif isinstance(e, EMakeMap2):
             constant += EXTREME_COST
             terms.append(EUnaryOp(UOp.Sum, EMap(e.e, ELambda(e.value_function.arg, rt(e.value_function.body))).with_type(INT_BAG)).with_type(INT))
